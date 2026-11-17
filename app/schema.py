@@ -1,0 +1,40 @@
+"""Schema de extração (tool use). A IA só LÊ o documento; contas ficam em código."""
+NUM = {"type": ["number", "null"]}
+STR = {"type": ["string", "null"]}
+
+COTACAO_TOOL = {
+    "name": "registrar_cotacao",
+    "description": "Registra os dados extraídos de uma cotação de fornecedor.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "fornecedor": {"type": "string", "description": "Razão social do fornecedor (quem emitiu a cotação)"},
+            "fornecedor_curto": {"type": "string", "description": "Nome curto como o fornecedor é conhecido, MAIÚSCULAS (ex.: CRAL ARTIGOS PARA LABORATÓRIO LTDA -> CRALPLAST; KASVI IMPORTACAO... -> KASVI)"},
+            "numero_cotacao": STR,
+            "data_cotacao": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
+            "validade_proposta": STR,
+            "condicao_pagamento": {"type": ["string", "null"], "description": "Texto como no documento: '30/60/90', '28 DIAS', 'Pagamento Antecipado'"},
+            "tipo_frete": {"type": ["string", "null"], "description": "CIF, FOB ou texto original"},
+            "pedido_minimo": NUM,
+            "moeda": {"type": "string", "description": "BRL ou USD: moeda em que os preços unitários estão escritos"},
+            "total_documento_brl": {"type": ["number", "null"], "description": "Só para cotação em dólar: total do documento em R$, se o documento informar"},
+            "total_documento": {"type": ["number", "null"], "description": "Total do documento na moeda dos preços unitários"},
+            "itens": {"type": "array", "items": {"type": "object", "properties": {
+                "cod": {"type": ["string", "null"], "description": "COD da lista do comprador se este item for claramente o mesmo produto; senão null"},
+                "duvida": {"type": ["string", "null"], "description": "Se o casamento com a lista for incerto, motivo em poucas palavras; senão null"},
+                "descricao": {"type": "string", "description": "Descrição completa do produto, sem resumir"},
+                "marca": STR,
+                "quantidade": {"type": "number", "description": "Quantidade em unidades de venda (ex.: nº de frascos)"},
+                "unidade": STR,
+                "unidade_base": {"type": ["string", "null"], "description": "'g' se a unidade de venda é de massa (KG, G, FR de pó...), 'mL' se é de volume (LITRO, LT, mL)"},
+                "fator_base": {"type": ["number", "null"], "description": "Quanto vale UMA unidade em que o PREÇO é cobrado, em g ou mL: KG=1000, LITRO=1000, FR de 500 g=500, bombona vendida por bombona de 30 kg=30000. Não use tamanhos citados na descrição se o preço é por kg ou litro"},
+                "preco_unitario": {"type": "number"},
+                "icms_pct": NUM, "ipi_pct": NUM,
+                "total_linha": {"type": "number"},
+                "prazo_entrega_dias": STR,
+            }, "required": ["descricao", "quantidade", "preco_unitario", "total_linha"]}},
+            "observacoes": STR,
+        },
+        "required": ["fornecedor", "fornecedor_curto", "itens"],
+    },
+}

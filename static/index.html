@@ -1,0 +1,47 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Comparativo de cotações</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:Arial,sans-serif;margin:24px;color:#222}h1{font-size:20px}
+#drop{border:2px dashed #888;border-radius:8px;padding:24px;text-align:center;background:#fafafa}
+#drop.over{background:#e8f0ff}button{padding:8px 16px;margin:8px 4px 0 0;cursor:pointer}
+table{border-collapse:collapse;font-size:12px;margin-top:12px;width:100%}th,td{border:1px solid #ccc;padding:4px 6px}
+th{background:#1f3864;color:#fff}input,select{font-size:12px;width:90px}.erro{color:#b00020}.aviso{color:#9a6700}.info{color:#666}
+.off{opacity:.45}.alerta{background:#fff8e1}.wrap{overflow-x:auto}
+</style></head><body>
+<h1>Comparativo de cotações</h1>
+<p><b>1.</b> Lista de produtos (xlsx, coluna A = código, coluna B = nome): <input type="file" id="lf" accept=".xlsx"></p>
+<p><b>2.</b> Cotações:</p>
+<div id="drop">Arraste as cotações aqui (PDF, imagem, xlsx, csv, txt) ou <input type="file" id="f" multiple></div>
+<button id="go">Processar</button>
+<label>Rendimento diário % <input id="rend" type="number" step="0.01" value="0.05"></label>
+<label>Frete FOB % <input id="fob" type="number" step="0.5" value="5"></label>
+<label><input type="checkbox" id="incp" style="width:auto"> incluir aba Pendências</label>
+<button id="dl" disabled>Baixar planilha</button><span id="st"></span>
+<div id="pend"></div><div class="wrap"><table id="tb"></table></div>
+<script>
+let files=[],itens=[],pend=[],lista={};
+const $=id=>document.getElementById(id), d=$('drop');
+d.ondragover=e=>{e.preventDefault();d.classList.add('over')};d.ondragleave=()=>d.classList.remove('over');
+d.ondrop=e=>{e.preventDefault();d.classList.remove('over');files=[...e.dataTransfer.files];$('st').textContent=files.length+' arquivo(s)'};
+$('f').onchange=e=>{files=[...e.target.files];$('st').textContent=files.length+' arquivo(s)'};
+$('go').onclick=async()=>{
+  if(!$('lf').files.length||!files.length)return alert('Selecione a lista de produtos e as cotações.');
+  const fd=new FormData();fd.append('lista',$('lf').files[0]);files.forEach(f=>fd.append('files',f));$('st').textContent='Processando…';
+  const r=await fetch('/api/process',{method:'POST',body:fd});
+  if(!r.ok){$('st').textContent=(await r.json()).detail||'Erro '+r.status;return}
+  const j=await r.json();itens=j.itens;pend=j.pendencias;lista=j.lista;$('st').textContent='Pronto';$('dl').disabled=false;render()};
+function render(){
+  $('pend').innerHTML=pend.map(p=>`<div class="${p.nivel}">[${p.nivel}] ${p.arquivo||''} ${p.msg}</div>`).join('');
+  const num=(i,k,w)=>`<input type="number" step="any" value="${itens[i][k]??''}" onchange="itens[${i}].${k}=this.value===''?null:+this.value">`;
+  $('tb').innerHTML='<tr><th>Arquivo</th><th>Fornecedor</th><th>Descrição (fornecedor)</th><th>MP</th><th>QTDE (g)</th><th>g/FR</th><th>Preço FR</th><th>Frete</th><th>Prazo (dias)</th><th>Pgto</th><th>Alertas</th></tr>'+
+  itens.map((x,i)=>`<tr class="${x.cod?((x.alertas||[]).some(a=>a.startsWith('Conferir'))?'alerta':''):'off'}"><td>${x.arquivo}</td><td>${x.fornecedor}</td><td>${x.descricao_forn}</td>
+  <td><select onchange="setCod(${i},this.value)"><option value="">— fora —</option>${Object.entries(lista).map(([k,v])=>`<option value="${k}" ${k==x.cod?'selected':''}>${k} ${v}</option>`).join('')}</select></td>
+  <td>${num(i,'qtde_g')}</td><td>${num(i,'fr_g')}</td><td>${num(i,'preco_fr')}</td>
+  <td><select onchange="itens[${i}].frete=this.value">${['CIF','FOB'].map(o=>`<option ${o==x.frete?'selected':''}>${o}</option>`).join('')}</select></td>
+  <td>${num(i,'prazo_dias')}</td><td>${x.pgto||''}</td><td>${(x.alertas||[]).join('; ')}</td></tr>`).join('')}
+function setCod(i,cod){itens[i].cod=cod||null;render()}
+$('dl').onclick=async()=>{
+  const r=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(
+   {itens,lista,pendencias:pend,rendimento:$('rend').value/100,frete_fob:$('fob').value/100,incluir_pendencias:$('incp').checked})});
+  const a=document.createElement('a');a.href=URL.createObjectURL(await r.blob());a.download='comparativo_cotacoes.xlsx';a.click()};
+</script></body></html>
