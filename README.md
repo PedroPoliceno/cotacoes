@@ -1,11 +1,11 @@
 # Comparativo de cotações
 
 1. Anexar a lista de produtos (xlsx: coluna A = código, coluna B = nome).
-2. Anexar as cotações (PDF, imagem, xlsx, csv, txt). Uma chamada ao Claude por cotação extrai os dados e já indica o código da lista.
+2. Anexar as cotações (PDF, imagem, xlsx, csv, txt). Uma chamada ao modelo (Groq) por cotação extrai os dados e já indica o código da lista.
 3. Conferir na tela (itens com dúvida vêm sinalizados) e baixar a planilha única, um bloco por produto.
 
 ## Rodar
-1. Copie `.env.example` para `.env` e preencha `ANTHROPIC_API_KEY=` com a sua chave.
+1. Copie `.env.example` para `.env` e preencha `GROQ_API_KEY=` (e confira `GROQ_VISION_MODEL` em console.groq.com/docs/vision).
 2. Suba:
 
        docker build -t cotacoes . && docker run -p 8000:8000 --env-file .env cotacoes
@@ -17,6 +17,7 @@ Abrir http://localhost:8000 (o `.env` fica fora do Git e da imagem Docker).
     python3 -m unittest tests.test_core -v
 
 ## Onde mexer
+- `app/extractor.py`: lê o arquivo (texto, ou imagem se for escaneado), chama o Groq e valida a resposta
 - `app/lista.py`: leitura da planilha de produtos
 - `app/pipeline.py`: parsers de prazo/frete/embalagem, validações, custo final
 - `app/schema.py`: campos extraídos pela IA

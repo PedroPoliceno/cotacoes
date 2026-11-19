@@ -17,6 +17,28 @@ def tipo_frete(txt):
     return "FOB" if "FOB" in t else "CIF" if "CIF" in t else None
 
 
+_UNID = {"kg": (1000.0, "g"), "l": (1000.0, "mL"), "lt": (1000.0, "mL"), "lts": (1000.0, "mL"),
+         "litro": (1000.0, "mL"), "litros": (1000.0, "mL")}
+_TAM = re.compile(r"(\d+(?:[.,]\d+)?)\s*(kg|gr|g|ml|lt|l)\b", re.I)
+
+
+def conteudo_unidade(unidade, descricao, fator_ia=None, base_ia=None):
+    """Quanto vale UMA unidade de venda em g ou mL.
+    KG e LITRO são exatos (a IA não decide); frasco/unidade usa o tamanho da descrição; a IA é o último recurso."""
+    u = re.sub(r"[^a-z]", "", (unidade or "").lower())
+    if u in _UNID:
+        return _UNID[u]
+    achados = []
+    for n, un in _TAM.findall(descricao or ""):
+        v, un = float(n.replace(",", ".")), un.lower()
+        achado = (v * 1000, "g") if un == "kg" else (v, "g") if un in ("g", "gr") else (v, "mL") if un == "ml" else (v * 1000, "mL")
+        if achado not in achados:
+            achados.append(achado)
+    if achados and (len(achados) == 1 or not fator_ia):
+        return achados[0]
+    return (float(fator_ia), base_ia or "g") if fator_ia else (None, "g")
+
+
 def custo_final(it: dict, rend: float = 0.0005, frete_fob: float = 0.05) -> float:
     """Mesma fórmula da planilha: K + M - K*rendimento*prazo   (K = preço por grama)."""
     h = it["preco_fr"] / it["fr_g"]
@@ -38,6 +60,10 @@ def process_doc(filename: str, doc: dict, lista: dict):
         cambio = brl / usd if brl and usd else None
         if cambio is None:
             pend.append(_p(filename, forn, "erro", "moeda", "Cotação em dólar sem total em R$ para converter: itens ficam fora da planilha"))
+    if doc.get("conflito"):
+        pend.append(_p(filename, forn, "aviso", "conflito", f"Documento com informações conflitantes: {doc['conflito']}"))
+    if doc.get("aviso_leitura"):
+        pend.append(_p(filename, forn, "aviso", "leitura", doc["aviso_leitura"]))
     linhas = doc.get("itens") or []
     soma = sum(i["total_linha"] for i in linhas)
     if doc.get("total_documento") and abs(soma - doc["total_documento"]) > 0.05:
@@ -47,7 +73,7 @@ def process_doc(filename: str, doc: dict, lista: dict):
         if abs(i["quantidade"] * i["preco_unitario"] - i["total_linha"]) > max(0.02, 0.005 * i["total_linha"]):
             pend.append(_p(filename, forn, "erro", "linha", f"Qtd × unitário ≠ total na linha: {desc}"))
         cod = i.get("cod") if i.get("cod") in lista else None  # IA só pode escolher da lista
-        fator = i.get("fator_base") or None
+        fator, base = conteudo_unidade(i.get("unidade"), desc, i.get("fator_base"), i.get("unidade_base"))
         icms = i.get("icms_pct")
         alertas = []
         if cod and i.get("duvida"):
@@ -63,7 +89,7 @@ def process_doc(filename: str, doc: dict, lista: dict):
         if cod and cambio and cambio != 1.0:
             alertas.append(f"Convertido de US$ (câmbio {cambio:.4f})")
         items.append({"arquivo": filename, "fornecedor": forn, "cod": cod, "descricao_forn": desc, "marca": i.get("marca"),
-                      "qtde_g": i["quantidade"] * fator if fator else None, "fr_g": fator, "um": i.get("unidade_base") or "g",
+                      "qtde_g": i["quantidade"] * fator if fator else None, "fr_g": fator, "um": base,
                       "preco_fr": i["preco_unitario"] * cambio if cambio else None,
                       "icms": icms / 100 if icms is not None else None, "ipi": (i.get("ipi_pct") or 0) / 100,
                       "frete": frete or "CIF", "prazo_dias": dias, "pgto": doc.get("condicao_pagamento") or "",

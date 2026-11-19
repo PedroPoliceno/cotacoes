@@ -26,7 +26,7 @@ d.ondrop=e=>{e.preventDefault();d.classList.remove('over');files=[...e.dataTrans
 $('f').onchange=e=>{files=[...e.target.files];$('st').textContent=files.length+' arquivo(s)'};
 $('go').onclick=async()=>{
   if(!$('lf').files.length||!files.length)return alert('Selecione a lista de produtos e as cotações.');
-  const fd=new FormData();fd.append('lista',$('lf').files[0]);files.forEach(f=>fd.append('files',f));$('st').textContent='Processando…';
+  const fd=new FormData();fd.append('lista',$('lf').files[0]);files.forEach(f=>fd.append('files',f));$('st').textContent='Processando… (isso pode levar alguns minutos)';
   const r=await fetch('/api/process',{method:'POST',body:fd});
   if(!r.ok){$('st').textContent=(await r.json()).detail||'Erro '+r.status;return}
   const j=await r.json();itens=j.itens;pend=j.pendencias;lista=j.lista;$('st').textContent='Pronto';$('dl').disabled=false;render()};

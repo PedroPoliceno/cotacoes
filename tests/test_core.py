@@ -73,13 +73,6 @@ class Core(unittest.TestCase):
         doc = dict(fornecedor_curto="X", itens=[dict(descricao="Y", quantidade=1, preco_unitario=1, total_linha=1, cod="MP1")])
         self.assertTrue(any(p["tipo"] == "fator" for p in process_doc("x", doc, {"MP1": "Y"})[1]))
 
-    def test_imagem_tipo_pelo_conteudo(self):  # .png que é JPEG derrubava a API
-        from app.extractor import build_content
-        jpeg = b"\xff\xd8\xff\xe0" + b"0" * 20
-        self.assertEqual(build_content("print.png", jpeg, LISTA)[0]["source"]["media_type"], "image/jpeg")
-        png = b"\x89PNG\r\n\x1a\n" + b"0" * 20
-        self.assertEqual(build_content("print.jpg", png, LISTA)[0]["source"]["media_type"], "image/png")
-
     def test_lista(self):
         def xl(rows):
             wb = openpyxl.Workbook(); [wb.active.append(r) for r in rows]

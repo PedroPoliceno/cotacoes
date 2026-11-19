@@ -1,5 +1,8 @@
 fastapi
 uvicorn[standard]
 python-multipart
-anthropic
+openai
+requests
+pypdfium2
+pillow
 openpyxl

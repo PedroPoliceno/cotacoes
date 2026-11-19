@@ -9,7 +9,7 @@ COTACAO_TOOL = {
         "type": "object",
         "properties": {
             "fornecedor": {"type": "string", "description": "Razão social do fornecedor (quem emitiu a cotação)"},
-            "fornecedor_curto": {"type": "string", "description": "Nome curto como o fornecedor é conhecido, MAIÚSCULAS (ex.: CRAL ARTIGOS PARA LABORATÓRIO LTDA -> CRALPLAST; KASVI IMPORTACAO... -> KASVI)"},
+            "fornecedor_curto": {"type": "string", "description": "Nome da marca do fornecedor em UMA palavra, MAIÚSCULAS, sem LTDA/COMERCIAL/INDUSTRIA (ex.: KASVI, NEON, INTERLAB, QUIMIDROL)"},
             "numero_cotacao": STR,
             "data_cotacao": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
             "validade_proposta": STR,
@@ -33,6 +33,7 @@ COTACAO_TOOL = {
                 "total_linha": {"type": "number"},
                 "prazo_entrega_dias": STR,
             }, "required": ["descricao", "quantidade", "preco_unitario", "total_linha"]}},
+            "conflito": {"type": ["string", "null"], "description": "Se o documento se contradisser (pagamento, frete, preços), descreva em uma frase; senão null"},
             "observacoes": STR,
         },
         "required": ["fornecedor", "fornecedor_curto", "itens"],
