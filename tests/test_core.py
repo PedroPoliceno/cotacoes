@@ -26,7 +26,7 @@ class Core(unittest.TestCase):
         for i in self.itens:
             if i["cod"]:
                 por.setdefault(i["cod"], []).append(i["fornecedor"])
-        self.assertEqual(sorted(por["MP15"]), ["CRALPLAST", "INTERLAB", "KASVI"])
+        self.assertEqual(sorted(por["MP15"]), ["CRALPLAST", "KASVI"])  # 'AGAR -454g' não prova ser Agar Bacteriológico
         self.assertEqual(por["MP20"], ["CRALPLAST"])
         # COD inventado pela IA (fora da lista) é descartado
         from app.pipeline import process_doc
@@ -40,11 +40,37 @@ class Core(unittest.TestCase):
 
     def test_aviso_restricao(self):
         from app.pipeline import process_doc
-        doc = dict(fornecedor_curto="CRALPLAST", itens=[dict(descricao="AGAR UTIC", quantidade=1, preco_unitario=1,
-                   total_linha=1, cod="MP20", duvida="Lista exclui HiMedia; cotação é HiMedia")])
+        doc = dict(fornecedor_curto="CRALPLAST", itens=[dict(descricao="AGAR CROMOGENICO UTIC", quantidade=1, preco_unitario=1,
+                   total_linha=1, cod="MP20", alerta_conformidade="Lista exige outra marca; cotação é HiMedia")])
         itens, pend = process_doc("x", doc, LISTA)
-        self.assertEqual(itens[0]["cod"], "MP20")  # continua na planilha
-        self.assertTrue(any(p["tipo"] == "duvida" and "HiMedia" in p["msg"] for p in pend))
+        self.assertEqual(itens[0]["cod"], "MP20")  # identidade preservada; conformidade sinalizada
+        self.assertTrue(any(p["tipo"] == "conformidade" and "HiMedia" in p["msg"] for p in pend))
+
+    def test_barreira_identidade_nao_confunde_meios_de_cultura(self):
+        from app.pipeline import process_doc
+        lista = {"MP19": "Agar CLED (Verificar concentração e fotossensível Marca Conda)",
+                 "MP339": "Agar Mueller Hinton - Conda"}
+        doc = dict(fornecedor_curto="INTERLAB", itens=[
+            dict(descricao="CHROMAGAR ORIENTATION -500g", quantidade=1, preco_unitario=10, total_linha=10, cod="MP339"),
+            dict(descricao="CLED AGAR -500g", quantidade=1, preco_unitario=10, total_linha=10, cod="MP19",
+                 alerta_conformidade="Marca BBL/USA; lista exige Conda"),
+            dict(descricao="AGAR MUELLER HINTON FRASCO 500G", quantidade=1, preco_unitario=10, total_linha=10, cod="MP339",
+                 alerta_conformidade="Marca KASVI; lista exige Conda"),
+        ])
+        itens, pend = process_doc("x", doc, lista)
+        self.assertIsNone(itens[0]["cod"])
+        self.assertEqual(itens[1]["cod"], "MP19")
+        self.assertEqual(itens[2]["cod"], "MP339")
+        self.assertTrue(any(p["tipo"] == "identidade_incompativel" and "CHROMAGAR" in p["msg"] for p in pend))
+        self.assertFalse(any(p["tipo"] == "cod_invalido" and "CHROMAGAR" in p["msg"] for p in pend))
+
+    def test_duvida_de_identidade_bloqueia_associacao(self):
+        from app.pipeline import process_doc
+        doc = dict(fornecedor_curto="X", itens=[dict(descricao="Produto parecido", quantidade=1,
+                   preco_unitario=1, total_linha=1, cod="MP20", duvida="Não é possível confirmar a identidade")])
+        itens, pend = process_doc("x", doc, LISTA)
+        self.assertIsNone(itens[0]["cod"])
+        self.assertTrue(any(p["tipo"] == "duvida" for p in pend))
 
     def test_preco_por_kg_nao_usa_embalagem_da_descricao(self):  # bug: glicerina 16,39/KG virou /30.000 g
         from app.pipeline import process_doc
@@ -88,8 +114,9 @@ class Core(unittest.TestCase):
         self.assertAlmostEqual(m["CRALPLAST"], 0.5535, 4)
         self.assertLess(m["KASVI"], m["CRALPLAST"])
 
-    def test_alerta_qtde_divergente(self):  # Interlab 454 g × 8 FR ≠ 4000 g das demais
-        self.assertTrue(any(p["tipo"] == "qtde" and "MP15" in p["msg"] for p in self.pend))
+    def test_agar_generico_nao_cria_divergencia_de_quantidade(self):
+        # INTERLAB informa apenas 'AGAR -454g'; não é seguro inferir Agar Bacteriológico.
+        self.assertFalse(any(p["tipo"] == "qtde" and "MP15" in p["msg"] for p in self.pend))
 
     def test_xlsx(self):
         Path("/tmp/comparativo_teste.xlsx").write_bytes(build_xlsx(self.itens, LISTA, pendencias=self.pend))

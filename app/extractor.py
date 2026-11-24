@@ -29,14 +29,22 @@ PROMPT_BASE = (
     "Extraia todos os itens desta cotação de fornecedor. Copie valores exatamente como aparecem. "
     "Não invente: se um campo não aparecer, use null. Preços e totais são números (ponto decimal).\n\n"
     "Lista de produtos do comprador (COD | NOME):\n{lista}\n\n"
-    "Para cada item da cotação, preencha `cod` com o COD da lista se for claramente o MESMO produto "
-    "(nomes em outro idioma, abreviações, sinônimos químicos, grau P.A./ACS ou tamanho de embalagem diferente não mudam o produto; "
-    "ex.: glicose anidra = dextrose, ácido fênico = fenol). "
-    "Produto parecido mas diferente (outro tipo de meio de cultura, por exemplo) NÃO é o mesmo: use null. "
-    "Se ficar em dúvida, escolha o mais provável e explique em `duvida`.\n"
-    "O nome na lista pode trazer restrições ou observações (marca, fornecedor, armazenamento, \"verificar ...\"). "
-    "Compare com a marca e o fornecedor da cotação: se o item contrariar a restrição, ou se não der para confirmar "
-    "(ex.: a lista exige uma marca e a cotação é de outra), mantenha o `cod` e explique em `duvida`.\n\n"
+    "Para cada item da cotação, identifique primeiro qual produto ele É e compare essa identidade com a lista do comprador. "
+    "Preencha `cod` com o COD quando a identidade do produto for claramente a mesma, mesmo que exista divergência de marca, "
+    "fornecedor, embalagem ou alguma especificação exigida pelo comprador. "
+    "Nomes em outro idioma, abreviações e sinônimos químicos podem representar o mesmo produto "
+    "(ex.: glicose anidra = dextrose, ácido fênico = fenol). "
+    "Produto parecido mas diferente (outro tipo de meio de cultura, por exemplo) NÃO é o mesmo: use null.\\n"
+    "IMPORTANTE: se o produto for claramente o mesmo, NÃO deixe `cod` null apenas por divergência de marca, "
+    "fornecedor, concentração, fotossensibilidade, armazenamento ou outra exigência comercial/técnica. "
+    "Nesses casos, preencha `cod` normalmente e descreva a divergência em `alerta_conformidade`. "
+    "`duvida` deve ser usado SOMENTE quando não for possível afirmar com segurança que se trata do mesmo produto; "
+    "nesse caso, use `cod` null e explique a dúvida. Nunca escolha o produto mais provável.\\n"
+    "Não associe produtos apenas porque pertencem à mesma categoria ou compartilham palavras genéricas "
+    "(por exemplo, a palavra 'agar'). A identidade deve considerar nome específico, composição e aplicação; "
+    "uma exigência de marca não transforma um produto em outro produto.\\n"
+    "Registre `numero_item` exatamente como aparece na linha da cotação, se existir; caso contrário use null. "
+    "Registre `codigo_fabricante` somente se houver um código/referência explícito no documento; caso contrário use null.\n\n"
     "`quantidade` e `preco_unitario` seguem a unidade de venda da cotação (KG, LITRO, FR...). Preencha `fator_base` e "
     "`unidade_base` com o conteúdo dessa unidade em g ou mL (preço por KG -> 1000 g; por LITRO -> 1000 mL). "
     "Se o preço estiver em dólar, use moeda=USD e informe o total em R$ do documento, se houver.\n"
@@ -244,44 +252,34 @@ def _mensagens(texto: str, imagens: list, lista: dict) -> list:
     return [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]
 
 
-def _falta(d: dict) -> float:
-    total = d.get("total_documento")
-    return round(total - sum(i["total_linha"] for i in d["itens"]), 2) if total else 0.0
-
-
-def _completar(fn, messages: list, d: dict, rodadas: int = 2) -> dict:
-    """Se a soma dos itens fica abaixo do total do documento, pede à IA só os itens que faltam."""
-    for _ in range(rodadas):
-        falta = _falta(d)
-        if falta <= 0.05:
-            break
-        ja = "; ".join(f"{i['descricao'][:45]} ({i['total_linha']})" for i in d["itens"])
-        pedido = (f"Faltam itens: a soma das linhas é menor que o total do documento ({d['total_documento']:,.2f}); "
-                  f"faltam R$ {falta:,.2f}. Itens já extraídos: {ja}. Releia o documento e devolva SOMENTE os itens "
-                  'que ainda faltam, como {"itens": [...]}, com os mesmos campos.')
-        try:
-            extra = _normalizar(_extrair_json(fn(messages + [{"role": "user", "content": pedido}])))["itens"]
-        except (ValueError, json.JSONDecodeError):
-            break
-        chave = lambda i: (re.sub(r"\W", "", i["descricao"].lower()), round(i["total_linha"], 2))
-        vistos = {chave(i) for i in d["itens"]}
-        novos = [i for i in extra if chave(i) not in vistos]
-        if not novos:
-            break
-        d["itens"] += novos
-    return d
-
-
 def _chamar(fn, messages: list) -> dict:
-    """Nova tentativa se a resposta vier inválida; depois confere os itens contra o total do documento."""
+    """Extrai uma vez; só repete a chamada se o JSON vier inválido.
+
+    Não faz releitura automática para completar totais: essa segunda leitura podia
+    devolver novamente itens já extraídos com pequenas diferenças de descrição.
+    A divergência de total passa a ser um aviso para conferência humana.
+    """
     resposta = fn(messages)
     try:
         d = _normalizar(_extrair_json(resposta))
     except (ValueError, json.JSONDecodeError) as e:
         retry = messages + [{"role": "assistant", "content": resposta or ""},
-                            {"role": "user", "content": f"Resposta inválida ({e}). Responda de novo só com o JSON completo."}]
+                            {"role": "user", "content": f"Resposta inválida ({e}). Responda novamente somente com o JSON completo, sem repetir instruções."}]
         d = _normalizar(_extrair_json(fn(retry)))
-    return _completar(fn, messages, d)
+
+    total = d.get("total_documento")
+    if total is not None:
+        soma = sum(i["total_linha"] for i in d["itens"])
+        falta = round(total - soma, 2)
+        if abs(falta) > 0.05:
+            aviso = (
+                f"Conferência necessária: total das linhas ({soma:.2f}) difere do total "
+                f"do documento ({total:.2f}); diferença de {falta:.2f}. "
+                "O sistema não solicitou uma segunda extração automática para evitar duplicar itens."
+            )
+            anterior = d.get("aviso_leitura")
+            d["aviso_leitura"] = f"{anterior} | {aviso}" if anterior else aviso
+    return d
 
 
 def extract(filename: str, data: bytes, lista: dict) -> dict:

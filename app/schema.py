@@ -20,8 +20,11 @@ COTACAO_TOOL = {
             "total_documento_brl": {"type": ["number", "null"], "description": "Só para cotação em dólar: total do documento em R$, se o documento informar"},
             "total_documento": {"type": ["number", "null"], "description": "Total do documento na moeda dos preços unitários"},
             "itens": {"type": "array", "items": {"type": "object", "properties": {
-                "cod": {"type": ["string", "null"], "description": "COD da lista do comprador se este item for claramente o mesmo produto; senão null"},
-                "duvida": {"type": ["string", "null"], "description": "Se o casamento com a lista for incerto, motivo em poucas palavras; senão null"},
+                "cod": {"type": ["string", "null"], "description": "COD da lista do comprador somente quando a identidade do produto for a mesma; divergências de marca/especificação vão em alerta_conformidade e não impedem o COD. Se a identidade for incerta ou for outro produto, use null"},
+                "duvida": {"type": ["string", "null"], "description": "Somente dúvida sobre a identidade do produto; se preenchido, cod deve ser null"},
+                "alerta_conformidade": {"type": ["string", "null"], "description": "Divergência de marca, fornecedor, concentração, especificação ou outra exigência; não impede preencher cod quando a identidade do produto é a mesma"},
+                "numero_item": STR,
+                "codigo_fabricante": STR,
                 "descricao": {"type": "string", "description": "Descrição completa do produto, sem resumir"},
                 "marca": STR,
                 "quantidade": {"type": "number", "description": "Quantidade em unidades de venda (ex.: nº de frascos)"},
