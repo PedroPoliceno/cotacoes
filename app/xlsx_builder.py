@@ -58,11 +58,14 @@ def build_xlsx(items, lista, rend=0.0005, frete_fob=0.05, pendencias=None) -> by
             ws.cell(r - 1, c).border = sep
         r += 1  # linha em branco entre blocos
     ws.freeze_panes = "A5"
-    if pendencias:
+    # A planilha contém somente avisos de produtos/conferência. Erros operacionais
+    # e de validação são apresentados exclusivamente na interface.
+    avisos = [p for p in (pendencias or []) if p.get("nivel") == "aviso"]
+    if avisos:
         wp = wb.create_sheet("Pendências")
         for c, h in enumerate(["Nível", "Arquivo", "Fornecedor", "Mensagem"], 1):
             wp.cell(1, c, h).font = F(bold=True)
-        for i, p in enumerate(pendencias, 2):
+        for i, p in enumerate(avisos, 2):
             for c, k in enumerate(["nivel", "arquivo", "fornecedor", "msg"], 1):
                 wp.cell(i, c, p.get(k, "")).font = F()
         for col, w in zip("ABCD", (9, 30, 14, 110)):

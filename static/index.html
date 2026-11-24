@@ -445,7 +445,8 @@ $('go').onclick=async()=>{
   const j=await r.json();itens=j.itens;pend=j.pendencias;lista=j.lista;$('st').textContent='Pronto!';$('dl').disabled=false;render()};
 
 function render(){
-  $('pend').innerHTML=pend.map(p=>`<div class="${p.nivel}"><b>[${p.nivel.toUpperCase()}]</b> ${p.arquivo||''} ${p.msg}</div>`).join('');
+  // Na interface, exibir somente erros. Avisos de produtos ficam na planilha.
+  $('pend').innerHTML=pend.filter(p=>p.nivel==='erro').map(p=>`<div class="erro"><b>[ERRO]</b> ${p.arquivo||''} ${p.msg}</div>`).join('');
   const num=(i,k,w)=>`<input type="number" step="any" value="${itens[i][k]??''}" onchange="itens[${i}].${k}=this.value===''?null:+this.value">`;
   $('tb').innerHTML='<thead><tr><th>Arquivo</th><th>Fornecedor</th><th>Descrição (fornecedor)</th><th>MP</th><th>QTDE (g)</th><th>g/FR</th><th>Preço FR</th><th>Frete</th><th>Prazo (dias)</th><th>Pgto</th><th>Alertas</th></tr></thead><tbody>'+
   itens.map((x,i)=>`<tr class="${x.cod?((x.alertas||[]).some(a=>a.startsWith('Conferir'))?'alerta':''):'off'}"><td>${x.arquivo}</td><td>${x.fornecedor}</td><td>${x.descricao_forn}</td>
