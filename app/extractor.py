@@ -51,7 +51,12 @@ PROMPT_BASE = (
     "Se o documento se contradisser (ex.: cabeçalho diz 'à vista' e as observações dizem 'boleto 28 dias'), "
     "use a informação mais específica e descreva o conflito em `conflito`.\n\n"
     "Responda SOMENTE com um objeto JSON válido que siga o schema do sistema, sem texto antes ou depois. "
-    "Escreva primeiro os campos do cabeçalho (inclusive `total_documento`) e por último `itens`, com TODOS os itens do documento."
+    "Escreva primeiro os campos do cabeçalho (inclusive `total_documento`) e por último `itens`, com TODOS os itens do documento.\n\n"
+    "REGRA CRÍTICA SOBRE O FORNECEDOR: A NEWPROV é a empresa COMPRADORA.\n"
+    "A NEWPROV nunca deve ser identificada como fornecedora.\n"
+    "Não confunda o comprador, destinatário, cliente ou solicitante com o fornecedor.\n"
+    "Procure identificar a empresa emissora pelo cabeçalho, logotipo, dados comerciais, CNPJ e informações de contato.\n"
+    "Se não conseguir identificar o fornecedor com segurança, não invente um nome. Sinalize a incerteza."
 )
 
 

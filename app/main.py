@@ -27,7 +27,7 @@ async def process(lista: UploadFile = File(...), files: list[UploadFile] = File(
             if len(data) > MAX_MB * 1024 * 1024:
                 raise ValueError(f"Arquivo maior que {MAX_MB} MB")
             docs.append((f.filename, await run_in_threadpool(extractor.extract, f.filename, data, itens_lista)))
-        except Exception as e:  # um arquivo ruim não derruba o lote
+        except Exception as e:  # um arquivo ruim nÃ£o derruba o lote
             pend.append({"arquivo": f.filename, "fornecedor": "", "nivel": "erro", "tipo": "leitura", "msg": str(e)})
     itens, p2 = pipeline.process_all(docs, itens_lista)
     return {"itens": itens, "pendencias": pend + p2,
