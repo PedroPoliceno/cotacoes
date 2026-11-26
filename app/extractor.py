@@ -1,6 +1,6 @@
 """Extração com APIs gratuitas: Groq (texto ou visão); Cloudflare só como reserva para documentos 100% texto.
 
-Regra de ouro: o modelo só recebe o que realmente existe no documento.
+O modelo só recebe o que realmente existe no documento.
  - PDF com texto  -> texto da página
  - PDF escaneado / sem texto -> página renderizada em imagem (endireitada se estiver deitada)
  - Imagem (png/jpg) -> a própria imagem (reencodada em JPEG, então a extensão não importa)
@@ -61,29 +61,51 @@ PROMPT_BASE = (
 
 
 # ---------------------------------------------------------------- leitura do arquivo
+# Calcula a quantidade de informação escrita no documento para saber se a página está em branco ou não
 def _tinta(img: Image.Image) -> float:
+    # Converte a imagem em cinza e calcula a densidade de cada pixel, e converte todo o pixel abaixo de 160 para 0 para facilitar a leitura
     g = img.convert("L").point(lambda p: 255 if p < 160 else 0)
+    # Conta quantos pixels são pretos e divide pelo tamanho total da imagem, retornando um número de 0.00 a 1.00
     return sum(g.histogram()[255:]) / (g.size[0] * g.size[1])
 
-
+# Retorna uma lista com o tom de cada pixel (0 a 255)
 def _pixels(img: Image.Image):
-    return list(getattr(img, "get_flattened_data", img.getdata)())  # getdata some em Pillow novo
+    # Busca o atributo 'get_flattened_data' em versões do Pillow mais nova, caso não encontre pega o valor padrão (a sequência do objeto "Image")
+    return list(getattr(img, "get_flattened_data", img.getdata)())
 
+
+#Identifica se a variação de cores tem predominância vertical ou horizontal; textos horizontais tendem a ter mais variação nas linhas do que nas colunas.
 
 def _deitada(img: Image.Image) -> bool:
-    """Texto horizontal gera muita variação entre linhas; página deitada gera entre colunas."""
+    # Converte a imagem para cinza e depois negativa ela
     d = ImageOps.invert(img.convert("L"))
+
+    # Calcula a variância das listas
     var = lambda v: sum((x - sum(v) / len(v)) ** 2 for x in v) / len(v)
+
+    """
+    Atribui a 'rows' uma imagem com 1 pixel de largura e 400 de altura;
+    Usa o BILINEAR para atribuir a cor média da LINHA da imagem original no pixel da imagem redimensionada.
+    Atribui a 'cols' uma imagem de 400 pixels de largura com 1 de altura;
+    Usa o BILINEAR para calcular a cor média da COLUNA ao invés da linha.
+    """
     rows, cols = _pixels(d.resize((1, 400), Image.BILINEAR)), _pixels(d.resize((400, 1), Image.BILINEAR))
     vc = var(cols)
+
+    # Se a variância das colunas for maior que 0 e quando dividida pela variância das linhas o resultado é menor que 0.5 retorna 'true'.
     return vc > 0 and var(rows) / vc < 0.5
 
-
+# Converte a imagem jpeg em string base 64
 def _jpeg_b64(img: Image.Image) -> str:
+    # Converte a imagem em colorido
     img = img.convert("RGB")
+    # Converte a imagem em um 'thumbnail' para otimizar o desempenho.
     img.thumbnail((2000, 2000))
+    # Declara um buffer na memória
     buf = io.BytesIO()
+    # Salva a imagem com qualidade 88% no buffer como jpeg.
     img.save(buf, "JPEG", quality=88)
+    # Pega os bytes salvos no buffer transforma em string (b64) e depois codifica para uma string padrão.
     return base64.b64encode(buf.getvalue()).decode()
 
 
