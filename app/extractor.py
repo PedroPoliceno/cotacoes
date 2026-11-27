@@ -111,39 +111,57 @@ def _jpeg_b64(img: Image.Image) -> str:
 
 def _xlsx_text(data: bytes) -> str:
     import openpyxl
+    # Salva o documento em um buffer de memória
     wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
     out = []
     for ws in wb:
+        # Para cada planilha no documento, a lista recebe primeiro o título da planilha
         out.append(f"## Planilha: {ws.title}")
+        # Para cada linha na planilha gera um Array com os dados das células
         for row in ws.iter_rows(values_only=True):
+            # Os Arrays das linhas são concatenados para uma única string dentro de uma lista separando os dados por '|'
             if any(c is not None for c in row):
                 out.append(" | ".join("" if c is None else str(c) for c in row))
+    # Concatena as linhas que estão salvos na lista como uma única string e separa as linhas com uma quebra de linha.
     return "\n".join(out)
 
 
+# Retorna (texto, [imagens_jpeg_base64]).
 def ler_documento(filename: str, data: bytes):
-    """Retorna (texto, [imagens_jpeg_base64])."""
+    # Retorna a extensão do arquivo com letras minúsculas.
     ext = Path(filename).suffix.lower()
     if ext == ".pdf":
         textos, imagens = [], []
         for n, page in enumerate(pdfium.PdfDocument(data), 1):
+            # Pega o texto do documento e transforma em uma lista com strings
             t = page.get_textpage().get_text_range().strip()
             if len(t) >= MIN_TEXTO:
+                # Se atingir o mínimo de texto, concatena as strings em uma lista e apaga caracteres \r
                 textos.append(f"--- Página {n} ---\n{t.replace(chr(13), '')}")
                 continue
+            # Converte a página do pdf em uma imagem
             img = page.render(scale=1.6).to_pil()
+            # Verifica se há o mínimo de informação na página
             if _tinta(img) < MIN_TINTA:
                 continue  # página em branco ou só logo
+            # Verifica a variação de cores horizontalmente e verticalmente da página (para saber se está de pé ou deitada)
             if _deitada(img):
+                # Se estiver deitada, rotaciona.
                 img = img.rotate(ROTACAO_DEITADA, expand=True)
+            # Converte a imagem em string (base64) e salva em uma lista
             imagens.append(_jpeg_b64(img))
+        # Retorna os textos do pdf separados por uma quebra de linha, e retorna as imagens convertidas em string
         return "\n".join(textos), imagens
     if ext in IMG:
+        # Se o arquivo for uma imagem, retorna uma string vazia e salva o arquivos da imagem dentro de uma lista como uma string padrão
         return "", [_jpeg_b64(Image.open(io.BytesIO(data)))]
     if ext in (".xlsx", ".xlsm"):
+        # Se for uma planilha, retorna os textos e uma lista vazia
         return _xlsx_text(data), []
     if ext in (".csv", ".txt", ".eml", ".md"):
+        # Decodifica arquivos de texto em strings padrão (utf-8), e retorna uma lista vazia
         return data.decode("utf-8", errors="replace"), []
+    # Aviso caso não for nenhum dos formatos suportados
     raise ValueError(f"Formato não suportado: {ext}")
 
 
